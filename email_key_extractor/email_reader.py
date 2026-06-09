@@ -48,7 +48,7 @@ def _get_access_token() -> str:
 def _get_folder_id(token: str, folder_name: str) -> str:
     """Busca el ID de la carpeta de correo por nombre."""
     url = f"{_GRAPH_BASE}/users/{config.GRAPH_USER_EMAIL}/mailFolders"
-    headers = {"Authorization": f"******"}
+    headers = {"Authorization": "Bearer " + token}
     resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     folders = resp.json().get("value", [])
@@ -70,7 +70,7 @@ def _iter_messages(
         f"/mailFolders/{folder_id}/messages"
         f"?$top=20&$select=id,subject,from,receivedDateTime,body&$orderby=receivedDateTime desc"
     )
-    headers = {"Authorization": f"******"}
+    headers = {"Authorization": "Bearer " + token}
     fetched = 0
     while url and fetched < max_messages:
         resp = requests.get(url, headers=headers, timeout=30)
@@ -121,7 +121,7 @@ def mark_as_processed(message_id: str) -> None:
     token = _get_access_token()
     url = f"{_GRAPH_BASE}/users/{config.GRAPH_USER_EMAIL}/messages/{message_id}"
     headers = {
-        "Authorization": f"******",
+        "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
     }
     requests.patch(url, headers=headers, json={"isRead": True}, timeout=30).raise_for_status()

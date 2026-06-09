@@ -117,7 +117,7 @@ _Pattern(
 ## Seguridad
 
 - Las claves **nunca** se escriben en texto plano en ningún archivo.
-- El vault local usa **AES-128-CBC + HMAC-SHA256** (Fernet) con derivación de clave PBKDF2 (390 000 iteraciones).
+- El vault local usa **AES-128-CTR + HMAC-SHA256** (Fernet) con derivación de clave PBKDF2 (390 000 iteraciones).
 - El log de auditoría solo guarda el valor **enmascarado** (`ab****xy`).
 - Las claves expiran automáticamente según `KEY_TTL_DAYS`.
 - Para entornos corporativos, usar **Azure Key Vault** en lugar del vault local.

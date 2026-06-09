@@ -42,7 +42,7 @@ class AuditLog:
         line = json.dumps(record, ensure_ascii=False)
         with self._path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
-        logger.debug("Audit: %s", line)
+        logger.debug("Audit event: %s status=%s", record.get("event"), record.get("status"))
 
     def log_stored(
         self,

@@ -2,7 +2,7 @@
 Capa de almacenamiento seguro de claves (vault).
 
 Soporta dos backends:
-  - LocalVault  : archivo cifrado con Fernet (AES-128-CBC + HMAC-SHA256).
+  - LocalVault  : archivo cifrado con Fernet (AES-128-CTR + HMAC-SHA256).
                   Derivación de clave con PBKDF2-HMAC-SHA256.
                   Adecuado para entornos sin acceso a cloud vault.
   - AzureVault  : Azure Key Vault via azure-keyvault-secrets.
@@ -136,9 +136,9 @@ class LocalVault(VaultBase):
         }
         self._data["entries"].append(entry)
         self._save()
-        secret_name = f"{system}/{key_type}"
-        logger.info("Clave almacenada en vault local: %s (expira en %d día/s)", secret_name, ttl_days)
-        return secret_name
+        vault_entry_name = f"{system}/{key_type}"
+        logger.info("Clave almacenada en vault local: %s (expira en %d día/s)", vault_entry_name, ttl_days)
+        return vault_entry_name
 
     def retrieve(self, system: str, key_type: str) -> str | None:
         salt = base64.b64decode(self._data["salt"])
@@ -195,7 +195,6 @@ class AzureVault(VaultBase):
         return f"{system}-{key_type}".replace("_", "-").replace("/", "-")
 
     def store(self, system: str, key_type: str, value: str, ttl_days: int = 1) -> str:
-        from datetime import timezone
         name = self._secret_name(system, key_type)
         expires = datetime.now(timezone.utc) + timedelta(days=ttl_days)
         self._client.set_secret(name, value, expires_on=expires)
