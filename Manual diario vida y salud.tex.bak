@@ -1,0 +1,191 @@
+Conectar a VPN SURA 
+
+Tener orden de cambio activa
+https://surasoporteti-smartit.onbmc.com/smartit/app/#/ticket-consoleStudio
+
+Tener donde anotar
+
+Obtener las siguientes claves:
+OPS$NEGOALTE en la instancia: PDNBANCA 
+OPS$NEGOALTE en la instancia: PDN 
+PASOINFO en la instancia: DLLPDN --para consultas
+OPS$SALRENT en la instancia: PDN --Cambios en salud
+OPS$OPERACIONES perri456aw 
+SURACACCESS19 en la instancia: PDN --para consultas de temas de reaseguro salud
+
+Revisar que el proceso masivo diario 113390 se ejecute durante la noche el proceso del dia anterior, inicia a las 12:05 todos los dias ecepto los viernes y domingo por las compilaciones en BD
+SELECT T.*, ROWID FROM TSIN_PARAMETROS @dllpdn_pdn_cnegoalt.world T WHERE CDPARAMETRO='C113390' ORDER BY PTPARAMETRO;
+
+Revisar pagos sin contabilizar, la informacion llega al correo despues de ejecutar el segundo JOB del proceso masivo 113390 o se puede ejecuta el query sinbtscua02.sql que trae la informacion de pagos sin contabilizar por dia, formato fecha solicitado 20251103 AAAAMMDD, en https://segurosti.atlassian.net/wiki/spaces/SIN/pages/4750540852/Errores+en+reservas+pagos+enviados+a+SAP
+se pueden encontrar diferentes errores documentados sobre pagos
+
+Revisar reservas sin contabilizar, la informacion llega al correo despues de ejecutar el segundo JOB del proceso masivo 113390 o se puede ejecuta el query sinbtscua03.sql que trae la informacion de reservas sin contabilizar por dia, formato fecha solicitado 20251103 AAAAMMDD, en https://segurosti.atlassian.net/wiki/spaces/SIN/pages/4750540852/Errores+en+reservas+pagos+enviados+a+SAP
+se pueden encontrar diferentes errores documentados
+
+Realizar Checklist cierre siniestros,son una serie de consultas que validan saldos entre tablas y marcas de contbilizacion
+https://segurosti.atlassian.net/wiki/spaces/SIN/pages/211026006/Checklist+cierre+siniestros
+Estas validaciones pueden tener los siguientes tipos de error:
+Ejecutando PASO 4: verificar reserva RVA vs TEXT_SINI
+
+Descuadre Fecha: 02/12/25 Rva_comparativo: 5098813150,64 Text_Sini: 5098588208,66 Diferencia: 224941,98 0810089371243
+
+Cuando se presentan diferencias entre TBTS_RVA_COMPARATIVO vs TEXT_SINI se debe seguir la documentacion que contiene consultas para ambas tablas y un query que nos dice el numero de expediente que presenta la Diferencia
+https://segurosti.atlassian.net/wiki/spaces/SIN/pages/84312348/C+mo+cuadrar+la+informaci+n+de+reservas+entre+SINCO+y+C+S
+
+Revisar el cierre diario para las reservas de salud, en la siguiente documentacion esta el paso a paso de cada uno de los procesos a ejecutar:
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/3240165391/Cierre+de+Reclamaciones+P+liza+de+Salud
+paso 1 Movimientos no encolados
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/262176775/Movimientos+no+encolados
+paso 2 Solución de Inconsistencias de Reserva
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/56787070/Soluci+n+de+Inconsistencias+de+Reserva
+paso 3 Solución de inconsistencias de Reaseguro
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/3240099914/Soluci+n+de+inconsistencias+de+Reaseguro
+paso 4 Solución de Inconsistencias de Órdenes de Pago (CXP)
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/56787078/Soluci+n+de+Inconsistencias+de+rdenes+de+Pago+CXP
+paso 5 Inconsistencias Surabroker y SAP
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/3240689723/Inconsistencias+Surabroker+y+SAP
+paso 6 Movimientos Faltantes por Reaseguro
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/4631527522/Movimientos+Faltantes+por+Reaseguro
+paso 6.1 Notificación Reaseguro Póliza de Salud
+https://segurosti.atlassian.net/wiki/spaces/PAS/pages/380403713/Notificaci+n+Reaseguro+P+liza+de+Salud
+
+Revisar el proceso diario de reaseguro para salud
+El proceso de reaseguro consiste en garantizar que la informacion llegue a la tabla tgwb_reaseguros, esta llegan en esta 0 y cuando queda reasegurada el estado es 50, muchas veces se debe cambiar el estado a cero ya que la info queda en estado 3,4,10
+Se valida diariamente que la info de la tabla historico llegue a la tabla trea_sini_movimientos
+
+--RESERVA = 0, PAGOS = 1
+/*
+ESTADOS RESEGURO
+0 = Estado iniciar para envio a reaseguro
+3 = Pendiente de reenvio
+4 = Error
+10 = Enviado a reaseguro o en procesamiento
+50 = Reasegurado
+*/
+--Consultar estado por transaccion de reserva o pago
+SELECT r.cdestado_reaseguro,r.*,ROWID
+FROM   tgwb_reaseguros r
+WHERE  r.cdtipo_movimiento =1 -- (RESERVA = 0, PAGOS = 1)
+AND    r.cdmovimiento_origen IN (124105607
+);
+--Consultar por dias
+SELECT rr.cdestado_reaseguro,rr.*, rowid
+FROM tgwb_reaseguros rr
+WHERE rr.cdtipo_movimiento  in ('1', '0')-- (RESERVA = 0, PAGOS = 1)
+  AND rr.cdestado_reaseguro < 50
+  AND rr.Feingreso >= TO_DATE('2025-12-01', 'YYYY-MM-DD')
+  AND rr.Feingreso < TO_DATE('2025-12-04', 'YYYY-MM-DD')
+  ORDER BY cdtipo_movimiento;
+  
+--Contar por dias  
+SELECT
+  CASE rr.cdtipo_movimiento
+    WHEN 0 THEN 'RESERVA'
+    WHEN 1 THEN 'PAGO'
+    ELSE 'DESCONOCIDO'
+  END AS tipo_movimiento,
+  COUNT(DISTINCT rr.cdmovimiento_origen) AS cantidad_movimientos
+FROM tgwb_reaseguros rr
+WHERE
+  rr.cdtipo_movimiento IN (0, 1)
+  AND rr.cdestado_reaseguro < 50
+  AND rr.Feingreso >= TO_DATE('2025-12-01', 'YYYY-MM-DD')
+  AND rr.Feingreso < TO_DATE('2025-12-04', 'YYYY-MM-DD')
+GROUP BY rr.cdtipo_movimiento
+ORDER BY rr.cdtipo_movimiento;
+  
+/*
+ESTADOS RESEGURO
+0 = Estado iniciar para envio a reaseguro
+3 = Pendiente de reenvio
+4 = Error
+10 = Enviado a reaseguro o en procesamiento
+50 = Reasegurado
+*/
+
+--Actualiza estado a cero para reenvio a reaseguro por dias
+UPDATE tgwb_reaseguros rr
+SET    rr.cdestado_reaseguro = 0
+WHERE rr.cdtipo_movimiento in ('1', '0') -- (RESERVA = 0, PAGOS = 1)
+  AND rr.cdestado_reaseguro < 50
+  AND rr.Feingreso >= TO_DATE('2025-12-01', 'YYYY-MM-DD')
+  AND rr.Feingreso < TO_DATE('2025-12-04', 'YYYY-MM-DD');
+  
+
+UPDATE tgwb_reaseguros rr
+SET rr.cdestado_reaseguro = 0
+WHERE rr.cdtipo_movimiento = 0
+  AND rr.cdestado_reaseguro < 50
+  --AND rr.Feingreso >= TO_DATE('2025-09-01', 'YYYY-MM-DD')
+  --AND rr.Feingreso < TO_DATE('2025-09-010', 'YYYY-MM-DD')
+  AND rr.cdmovimiento_origen NOT IN (193394027);
+
+
+--Actualiza estado a cero para reenvio a reaseguro por transaccion
+ 
+UPDATE tgwb_reaseguros rr
+SET    rr.cdestado_reaseguro = 0
+WHERE  rr.cdtipo_movimiento = 0 -- (RESERVA = 0, PAGOS = 1)
+AND    rr.cdestado_reaseguro < 50
+AND    rr.cdmovimiento_origen IN (193394027
+
+)
+
+SELECT inx.*, rea.*
+FROM   tgwb_reaseguros rea
+LEFT JOIN tgwb_inconsistencia inx
+ON     inx.cdtipo = 'RAP' -- CODIGO PARA EL TIPO DE INCONSISTENCIAS DE REASEGURO (RAP=PAGOS, RAR=RESERVA)
+AND    inx.cdclave = rea.cdmovimiento_origen
+WHERE  rea.cdtipo_movimiento =1 -- reserva = 0, pago = 1
+AND    rea.cdmovimiento_origen in (124206217
+
+
+ -- COLOCAR LOS REGISTROS QUE INTERESAN
+);
+
+  
+
+
+/********************************************************************************************/
+CIERRE FIN DE MES
+/********************************************************************************************/
+
+Proceso cierre durante ultimos dias del mes
+Tareas del cierre de siniestros - PM 113390 - 16700 y 15000
+
+Hola.
+ 
+A continuación listo algunas de las tareas que tenemos relacionadas al cierre de siniestros.
+ 
+	1. Revisar los correo “113390 - Reporte Pagos NO Contabilizados” y “113390 - Reporte Reservas NO Contabilizadas”. En caso de haber muchos pendientes reportar a los responsables. https://svn.suranet.com/svn/automatizacionDeProcesos/Siniestros/ProcesosMasivos/Cierre acá encuentran el archivo con los responsables (yo tenía un archivo donde ponía los responsables de cada mes)
+	2. En caso que el proceso falle reportar la inconsistencias al EGV responsable de solucionar y nosotr@s desatrasar el proceso. El proceso normalmente puede fallar en primer Job (BTS_EXT_RVA_DIARIA)  y en el “segundo” (BTS_CGA_RVA_SINCO)
+		a. Cuando falla en el primer job el error normalmente es por diferencias de saldos, manual en Confluence para este tema: https://segurosti.atlassian.net/wiki/spaces/SIN/pages/256212993/Como+cuadrar+la+Cancelaci+n+por+saldos
+		b. Cuando falla en el segundo job, normalmente es porque no coincidieron la fecha de registro de las reservas en SAP y la fecha en que se ejecuto la devuelta, manual en Confluence https://segurosti.atlassian.net/wiki/spaces/SIN/pages/2585067532/Error+en+Paso+BTS+CGA+RVA+SINCO+proceso+113390
+		c. Videos: para casos en que fallo por diferencias de saldos
+                                                    i.     2020/06/18: Fernando y Elizabeth Caso 090  https://web.microsoftstream.com/video/90a2d1a0-dd3e-449d-b8c8-500a474035ed?list=studio ,
+                                                   ii.     2020/09/10: Fernando y Pao Caso 083   https://web.microsoftstream.com/video/d56c64c8-7853-43c0-9352-314d86904ce0?list=watchlist
+		Nota: aunque el origen de la cancelación no sea la misma siempre el proceso para desatrasar si es el mismo, en el manual esta explicado
+	3. Los tres últimos días del mes correr el checklist del cierre de siniestros y reportar si hay casos para revisar al responsable, manual de Confluence https://segurosti.atlassian.net/wiki/spaces/SIN/pages/211026006/Checklist+cierre+siniestros
+	4. Ultimo día del mes, validar en SAP si hay pagos de ese día con inconsistencias y reportarlos a los responsables https://segurosti.atlassian.net/wiki/spaces/SIN/pages/261980171/Como+consultar+las+inconsistencias+en+SAP+de+Siniestros
+	5. Primer día del mes:
+		a. Si hay pendientes por contabiliza pedir que los gestionen y corran las tareas extras https://segurosti.atlassian.net/wiki/spaces/SIN/pages/2090108295/C+mo+gestionar+pagos+de+siniestros+no+contabilizados+en+cierre+de+mes
+		b. Cuando el proceso termine de ejecutar el penúltimo paso (HI_BTS_CGA_RVA_SINCOM), correr del checklist las consultas de la reserva, y pedir que ejecuten el update de las reservas pequeñas (Autonomia) y la moneda (Panamá)
+		c. Cuando ya se haya contabilizado todo y hecho los update pedir al centro de computo que liberen el último paso del 16700
+		d. Cuando termine el ultimo paso del 16700 correr del checklist las consultas de los pagos.
+		e. Guardar las evidencias para control SOX
+	6. Día 2 del mes, generar y enviar informe del cierre de siniestros
+		a. Manual Confluence https://segurosti.atlassian.net/wiki/spaces/SIN/pages/856686697/Como+generara+Informe+de+la+reserva+de+siniestro+al+100+para+contabilidad
+		b. Videos
+                                                    i.     https://web.microsoftstream.com/video/9621b07b-9ba0-429c-981c-d956eef1fa96?list=studio
+                                                   ii.     https://web.microsoftstream.com/video/2f10ec3b-d30a-4f07-b317-a1d082482d2a?list=studio
+	7. Daniel Felipe Herrera Cardona los cita la última semana para seguimiento del cuadre de SAP vs TERA ,David Casas Zapata reportan diferencias entre SAP y TERA, normalmente lo único que reporta y si debemos gestionar son las diferencias por IVA de 081 y 083, estos casos los gestiona el responsable del EGV. El resto de cosas suele ser porque no ha corrido bien el proceso que lleva la info a tera o son casos que no se procesan por c/s como por ejemplo 087 y 093 Pensiones (También llamado Rentas), o reservas/pagos del fondo de ahorros que ser cargan a la interfaz (TEXT_SINI) con el ramo del fondo y ellos no montan a TERA.
+               
+Otras documentación útil:
+ 
+	• Descripción Jobs y SQL’S PM113390/16700: https://segurosti.atlassian.net/wiki/spaces/SIN/pages/2637168727/PM+113390+16700+Cierre+de+Siniestros+Descripci+n+de+los+SQL
+	• Control SOX: https://segurosti.atlassian.net/wiki/spaces/SIN/pages/2208399466/Control+SOX+-+PM+16700+-+Integridad+de+informaci+n+de+reservas+y+pagos+entre+C+S+Siniestros+y+SAP
+	• Tipos de movimientos de reservas https://segurosti.atlassian.net/wiki/spaces/SIN/pages/693698610/Tipos+de+movimientos+de+reservas+HISTORICO+Y+TBTS+RVA+COMPARATIVO
+ 
+Nota: Tengo pendiente entregarles el proceso 15000
+ 
+Gracias.
